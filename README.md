@@ -1,141 +1,182 @@
-# Save the exact provided content into a Markdown file for GitHub use
+# SonarQube Local Setup on Ubuntu Linux
 
-content = """SonarQube local Setup on Ubuntu linux
+## Step 1: Update the System
+1. **Update the package list:**
+   ```bash
+   sudo apt update
+   ```
+   Updates the package list from the Ubuntu repositories to ensure the latest information about available software.
 
-Step 1: Update the System
-1. Update the package list:
+2. **Upgrade installed packages:**
+   ```bash
+   sudo apt upgrade -y
+   ```
+   Upgrades all installed packages to their latest versions. The `-y` flag automatically accepts prompts.
 
-sudo apt update
-Updates the package list from the Ubuntu repositories to ensure the latest information about available software.
-2. Upgrade installed packages:
+---
 
-sudo apt upgrade -y
-Upgrades all installed packages to their latest versions. The -y flag automatically accepts prompts.
-________________________________________
-Step 2: Install Java
-1. Install OpenJDK 17:
+## Step 2: Install Java
+1. **Install OpenJDK 17:**
+   ```bash
+   sudo apt install openjdk-17-jdk -y
+   ```
+   Installs the OpenJDK 17 development kit, which is compatible with SonarQube.
 
-sudo apt install openjdk-17-jdk -y
-Installs the OpenJDK 17 development kit, which is compatible with SonarQube.
-2. Verify the installation:
+2. **Verify the installation:**
+   ```bash
+   java -version
+   ```
+   Confirms the installed Java version.
 
-java -version
-Confirms the installed Java version.
-________________________________________
-Step 3: Install PostgreSQL
-1. Install Dependencies
+---
 
-sudo apt install curl ca-certificates -y
-sudo install -d /usr/share/postgresql-common/pgdg
-sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
-2. Add PostgreSQL Repository
+## Step 3: Install PostgreSQL
+1. **Install Dependencies:**
+   ```bash
+   sudo apt install curl ca-certificates -y
+   sudo install -d /usr/share/postgresql-common/pgdg
+   sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+   ```
 
-sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-sudo apt update
-3. Install PostgreSQL 15
+2. **Add PostgreSQL Repository:**
+   ```bash
+   sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+   sudo apt update
+   ```
 
-sudo apt install postgresql-15 -y
-4. Configure PostgreSQL
-1. Switch to the postgres user:
+3. **Install PostgreSQL 15:**
+   ```bash
+   sudo apt install postgresql-15 -y
+   ```
 
-sudo -i -u postgres
-2. Create a user and database for SonarQube:
+4. **Configure PostgreSQL:**
+   - Switch to the postgres user:
+     ```bash
+     sudo -i -u postgres
+     ```
+   - Create a user and database for SonarQube:
+     ```bash
+     createuser sonar
+     createdb sonar -O sonar
+     ```
+   - Set a password for the sonar user:
+     ```bash
+     psql
+     ALTER USER sonar WITH ENCRYPTED PASSWORD 'your_password';
+     \q
+     ```
+   - Exit the postgres user:
+     ```bash
+     exit
+     ```
 
-createuser sonar
-createdb sonar -O sonar
-3. Set a password for the sonar user:
+---
 
-psql
-ALTER USER sonar WITH ENCRYPTED PASSWORD 'your_password';
-\\q
-4. Exit the postgres user:
+## Step 4: Install SonarQube
+1. **Download SonarQube:**
+   ```bash
+   wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.5.1.90531.zip
+   ```
 
-exit
-________________________________________
-Step 4: Install SonarQube
-1. Download SonarQube
+2. **Extract and Move SonarQube:**
+   ```bash
+   unzip sonarqube-10.5.1.90531.zip
+   sudo mv sonarqube-10.5.1.90531 /opt/sonarqube
+   ```
 
-wget https://binaries.sonarsource.com/Distribution/sonarqube/sonarqube-10.5.1.90531.zip
-2. Extract and Move SonarQube
+3. **Create a SonarQube User:**
+   ```bash
+   sudo adduser --system --no-create-home --group --disabled-login sonarqube
+   sudo chown -R sonarqube:sonarqube /opt/sonarqube
+   ```
 
-unzip sonarqube-10.5.1.90531.zip
-sudo mv sonarqube-10.5.1.90531 /opt/sonarqube
-3. Create a SonarQube User
+4. **Configure SonarQube:**
+   - Edit the configuration file:
+     ```bash
+     sudo vi /opt/sonarqube/conf/sonar.properties
+     ```
+   - Set the database properties:
+     ```
+     sonar.jdbc.username=sonar
+     sonar.jdbc.password=your_password
+     sonar.jdbc.url=jdbc:postgresql://localhost/sonar
+     ```
 
-sudo adduser --system --no-create-home --group --disabled-login sonarqube
-sudo chown -R sonarqube:sonarqube /opt/sonarqube
-4. Configure SonarQube
-1. Edit the configuration file:
+---
 
-sudo vi /opt/sonarqube/conf/sonar.properties
-2. Set the database properties:
-sonar.jdbc.username=sonar
-sonar.jdbc.password=your_password
-sonar.jdbc.url=jdbc:postgresql://localhost/sonar
-________________________________________
-Step 5: Create a Systemd Service File
-1. Create the Service File
+## Step 5: Create a Systemd Service File
+1. **Create the Service File:**
+   ```bash
+   sudo vi /etc/systemd/system/sonarqube.service
+   ```
+   Add the following content:
+   ```ini
+   [Unit]
+   Description=SonarQube service
+   After=syslog.target network.target
 
-sudo vi /etc/systemd/system/sonarqube.service
-Add the following content:
+   [Service]
+   Type=forking
+   ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
+   ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
+   User=sonarqube
+   Group=sonarqube
+   Restart=always
+   LimitNOFILE=65536
+   LimitNPROC=4096
 
-[Unit]
-Description=SonarQube service
-After=syslog.target network.target
+   [Install]
+   WantedBy=multi-user.target
+   ```
 
-[Service]
-Type=forking
-ExecStart=/opt/sonarqube/bin/linux-x86-64/sonar.sh start
-ExecStop=/opt/sonarqube/bin/linux-x86-64/sonar.sh stop
-User=sonarqube
-Group=sonarqube
-Restart=always
-LimitNOFILE=65536
-LimitNPROC=4096
+2. **Start and Enable the Service:**
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl start sonarqube
+   sudo systemctl enable sonarqube
+   ```
 
-[Install]
-WantedBy=multi-user.target
+---
 
-2. Start and Enable the Service
+## Step 6: Configure System Limits
+1. **Increase File Descriptors and Processes Limits:**
+   - Edit the limits configuration file:
+     ```bash
+     sudo vi /etc/security/limits.conf
+     ```
+   - Add the following lines:
+     ```
+     sonarqube - nofile 65536
+     sonarqube - nproc 4096
+     ```
 
-sudo systemctl daemon-reload
-sudo systemctl start sonarqube
-sudo systemctl enable sonarqube
-________________________________________
-Step 6: Configure System Limits
-1. Increase File Descriptors and Processes Limits
-1. Edit the limits configuration file:
+2. **Set Virtual Memory Limits:**
+   - Set the `vm.max_map_count`:
+     ```bash
+     sudo sysctl -w vm.max_map_count=262144
+     ```
+   - Make the change permanent:
+     ```bash
+     sudo vi /etc/sysctl.conf
+     ```
+     Add the following line:
+     ```
+     vm.max_map_count=262144
+     ```
+   - Apply the changes:
+     ```bash
+     sudo sysctl -p
+     ```
 
-sudo vi /etc/security/limits.conf
-2. Add the following lines:
+---
 
-sonarqube - nofile 65536
-sonarqube - nproc 4096
-2. Set Virtual Memory Limits
-1. Set the vm.max_map_count:
-
-sudo sysctl -w vm.max_map_count=262144
-2. Make the change permanent:
-
-sudo vi /etc/sysctl.conf
-3. Add the following line:
-
-vm.max_map_count=262144
-4. Apply the changes:
-
-sudo sysctl -p
-________________________________________
-Final Steps: Verify SonarQube Installation
+## Final Steps: Verify SonarQube Installation
 1. Open your browser and navigate to:
-http://<your-server-ip>:9000
+   ```
+   http://<your-server-ip>:9000
+   ```
 2. Log in with the default credentials:
-o Username: admin
-o Password: admin
+   - **Username:** admin
+   - **Password:** admin
+
 3. Change the default password upon first login.
-"""
-
-file_path = "/mnt/data/SonarQube_Ubuntu_Setup.md"
-with open(file_path, "w") as f:
-    f.write(content)
-
-file_path
